@@ -12,9 +12,11 @@
   .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
   .controls label { font-weight: 600; font-size: 0.9rem; }
   .controls select { padding: 4px 8px; font-size: 0.9rem; }
-  .plots { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .plots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .plot { background: #fff; border: 1px solid #ddd; border-radius: 4px; min-height: 400px; }
-  @media (max-width: 1100px) { .plots { grid-template-columns: 1fr; } }
+  .legend-row { display: flex; gap: 16px; align-items: center; margin-top: 8px; font-size: 0.85rem; color: #444; }
+  .legend-swatch { display: inline-block; width: 14px; height: 14px; border: 1px solid #999; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  @media (max-width: 900px) { .plots { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -36,7 +38,15 @@
 <div class="plots">
   <div class="plot" id="plot-sigmaL"></div>
   <div class="plot" id="plot-sigmaH"></div>
+  <div class="plot" id="plot-purchase"></div>
   <div class="plot" id="plot-strategy"></div>
+</div>
+
+<div class="legend-row">
+  <span>Purchase map legend:</span>
+  <span><span class="legend-swatch" style="background:#e03030;"></span>Buys from seller 1</span>
+  <span><span class="legend-swatch" style="background:#3030e0;"></span>Buys from seller 2</span>
+  <span><span class="legend-swatch" style="background:#ffffff;"></span>No purchase</span>
 </div>
 
 <script>
@@ -77,6 +87,7 @@ function render() {
   const key = hlSel.value;
   if (!key || !DATA[key]) return;
   const d = DATA[key];
+  const n = d.price_grid.length;
 
   const heatLayout = (title) => ({
     title: { text: title, font: { size: 14 } },
@@ -103,6 +114,67 @@ function render() {
   Plotly.react('plot-sigmaH', heatTrace(d.sigma_H),
     heatLayout(`\u03c3\u2081(v = H = ${d.H.toFixed(1)}, p\u2081, p\u2082)`),
     { responsive: true });
+
+  // Purchase probability map (RGB image)
+  // P(buy from 1) = 0.5 * sigma_H[i][j] + 0.5 * sigma_L[i][j]
+  // P(buy from 2) = 0.5 * sigma_H[j][i] + 0.5 * sigma_L[j][i]  (transpose = seller 2 by symmetry)
+  // P(nothing)    = 1 - P1 - P2
+  // Color: R = 255*(1-P2), G = 255*P0, B = 255*(1-P1)
+  //   → pure red when P1=1, pure blue when P2=1, white when P0=1
+  const rgb = [];
+  const hoverP1 = [], hoverP2 = [], hoverP0 = [];
+  for (let i = 0; i < n; i++) {
+    const row = [];
+    const rP1 = [], rP2 = [], rP0 = [];
+    for (let j = 0; j < n; j++) {
+      const p1 = 0.5 * d.sigma_H[i][j] + 0.5 * d.sigma_L[i][j];
+      const p2 = 0.5 * d.sigma_H[j][i] + 0.5 * d.sigma_L[j][i];
+      const p0 = Math.max(0, 1 - p1 - p2);
+      row.push([
+        Math.round(255 * (1 - p2)),
+        Math.round(255 * p0),
+        Math.round(255 * (1 - p1)),
+      ]);
+      rP1.push(p1); rP2.push(p2); rP0.push(p0);
+    }
+    rgb.push(row);
+    hoverP1.push(rP1); hoverP2.push(rP2); hoverP0.push(rP0);
+  }
+
+  // Use a transparent image trace for color + an invisible heatmap for hover
+  const pMin = d.price_grid[0];
+  const pMax = d.price_grid[n - 1];
+  const dp = (pMax - pMin) / (n - 1);
+
+  Plotly.react('plot-purchase', [
+    {
+      z: rgb,
+      type: 'image',
+      x0: pMin, dx: dp,
+      y0: pMin, dy: dp,
+      hoverinfo: 'skip',
+    },
+    {
+      z: hoverP1,
+      x: d.price_grid,
+      y: d.price_grid,
+      type: 'heatmap',
+      opacity: 0,
+      showscale: false,
+      customdata: hoverP1.map((row, i) => row.map((_, j) => [hoverP1[i][j], hoverP2[i][j], hoverP0[i][j]])),
+      hovertemplate:
+        'p\u2081=%{y:.3f}, p\u2082=%{x:.3f}<br>' +
+        'P(buy 1)=%{customdata[0]:.3f}<br>' +
+        'P(buy 2)=%{customdata[1]:.3f}<br>' +
+        'P(nothing)=%{customdata[2]:.3f}<extra></extra>',
+    },
+  ], {
+    title: { text: 'Purchase Probability', font: { size: 14 } },
+    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y' },
+    yaxis: { title: 'p\u2081 (own price)' },
+    margin: { t: 40, b: 50, l: 60, r: 20 },
+    autosize: true,
+  }, { responsive: true });
 
   Plotly.react('plot-strategy', [{
     x: d.cost_grid,
