@@ -91,9 +91,10 @@ function render() {
 
   const heatLayout = (title) => ({
     title: { text: title, font: { size: 14 } },
-    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y' },
-    yaxis: { title: 'p\u2081 (own price)' },
+    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y', range: [0, 1] },
+    yaxis: { title: 'p\u2081 (own price)', range: [0, 1] },
     margin: { t: 40, b: 50, l: 60, r: 20 },
+    plot_bgcolor: '#ffffff',
     autosize: true,
   });
 
@@ -102,7 +103,7 @@ function render() {
     x: d.price_grid,
     y: d.price_grid,
     type: 'heatmap',
-    colorscale: 'YlOrRd',
+    colorscale: [[0, '#ffffff'], [0.25, '#fecc5c'], [0.5, '#fd8d3c'], [0.75, '#f03b20'], [1, '#bd0026']],
     zmin: 0, zmax: 1,
     colorbar: { title: '\u03c3', titleside: 'right' },
   }];
@@ -170,9 +171,10 @@ function render() {
     },
   ], {
     title: { text: 'Purchase Probability', font: { size: 14 } },
-    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y' },
-    yaxis: { title: 'p\u2081 (own price)' },
+    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y', range: [0, 1] },
+    yaxis: { title: 'p\u2081 (own price)', range: [0, 1] },
     margin: { t: 40, b: 50, l: 60, r: 20 },
+    plot_bgcolor: '#ffffff',
     autosize: true,
   }, { responsive: true });
 
