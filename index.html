@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seller-Optimal Recommendation Rules</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; padding: 20px; background: #fafafa; }
+  h1 { font-size: 1.4rem; margin-bottom: 12px; }
+  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .controls label { font-weight: 600; font-size: 0.9rem; }
+  .controls select { padding: 4px 8px; font-size: 0.9rem; }
+  .plots { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .plot { background: #fff; border: 1px solid #ddd; border-radius: 4px; min-height: 400px; }
+  @media (max-width: 1100px) { .plots { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Seller-Optimal Recommendation Rules &amp; Equilibrium Pricing</h1>
+
+<div class="controls">
+  <label>Distribution:
+    <select id="dist-select">
+      <option value="Uniform">Uniform</option>
+      <option value="Convex">Convex (x&sup2;)</option>
+    </select>
+  </label>
+  <label>(H, L):
+    <select id="hl-select"></select>
+  </label>
+</div>
+
+<div class="plots">
+  <div class="plot" id="plot-sigmaL"></div>
+  <div class="plot" id="plot-sigmaH"></div>
+  <div class="plot" id="plot-strategy"></div>
+</div>
+
+<script>
+let DATA = null;
+
+async function init() {
+  const resp = await fetch('data.json');
+  DATA = await resp.json();
+  populateHL();
+  render();
+}
+
+const distSel = document.getElementById('dist-select');
+const hlSel = document.getElementById('hl-select');
+distSel.addEventListener('change', () => { populateHL(); render(); });
+hlSel.addEventListener('change', render);
+
+function populateHL() {
+  const dist = distSel.value;
+  const pairs = Object.keys(DATA)
+    .filter(k => k.startsWith(dist + '_'))
+    .map(k => {
+      const m = k.match(/H([\d.]+)_L([\d.]+)/);
+      return { H: parseFloat(m[1]), L: parseFloat(m[2]), key: k };
+    })
+    .sort((a, b) => a.H - b.H || a.L - b.L);
+
+  hlSel.innerHTML = '';
+  pairs.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.key;
+    opt.textContent = `H = ${p.H.toFixed(1)}, L = ${p.L.toFixed(1)}`;
+    hlSel.appendChild(opt);
+  });
+}
+
+function render() {
+  const key = hlSel.value;
+  if (!key || !DATA[key]) return;
+  const d = DATA[key];
+
+  const heatLayout = (title) => ({
+    title: { text: title, font: { size: 14 } },
+    xaxis: { title: 'p\u2082 (competitor price)', scaleanchor: 'y' },
+    yaxis: { title: 'p\u2081 (own price)' },
+    margin: { t: 40, b: 50, l: 60, r: 20 },
+    autosize: true,
+  });
+
+  const heatTrace = (z) => [{
+    z: z,
+    x: d.price_grid,
+    y: d.price_grid,
+    type: 'heatmap',
+    colorscale: 'YlOrRd',
+    zmin: 0, zmax: 1,
+    colorbar: { title: '\u03c3', titleside: 'right' },
+  }];
+
+  Plotly.react('plot-sigmaL', heatTrace(d.sigma_L),
+    heatLayout(`\u03c3\u2081(v = L = ${d.L.toFixed(1)}, p\u2081, p\u2082)`),
+    { responsive: true });
+
+  Plotly.react('plot-sigmaH', heatTrace(d.sigma_H),
+    heatLayout(`\u03c3\u2081(v = H = ${d.H.toFixed(1)}, p\u2081, p\u2082)`),
+    { responsive: true });
+
+  Plotly.react('plot-strategy', [{
+    x: d.cost_grid,
+    y: d.strategy,
+    type: 'scatter',
+    mode: 'lines',
+    line: { width: 2, color: '#1f77b4' },
+  }], {
+    title: { text: 'Equilibrium Pricing S*(c)', font: { size: 14 } },
+    xaxis: { title: 'Cost c', range: [0, 1] },
+    yaxis: { title: 'Price S*(c)' },
+    margin: { t: 40, b: 50, l: 60, r: 20 },
+    autosize: true,
+  }, { responsive: true });
+}
+
+init();
+</script>
+</body>
+</html>
